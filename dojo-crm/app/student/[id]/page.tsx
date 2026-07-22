@@ -22,6 +22,7 @@ export default function StudentPage() {
 
   const [student, setStudent] = useState<Student | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [allDojoAttendance, setAllDojoAttendance] = useState<Array<{ class_date: string; student_id: string; present: boolean }>>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingBelt, setSavingBelt] = useState(false);
@@ -30,13 +31,15 @@ export default function StudentPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: s }, { data: a }, { data: f }] = await Promise.all([
+    const [{ data: s }, { data: a }, { data: allA }, { data: f }] = await Promise.all([
       supabase.from('students').select('*').eq('id', id).single(),
       supabase.from('attendance').select('*').eq('student_id', id).order('class_date'),
+      supabase.from('attendance').select('class_date, student_id, present').order('class_date'),
       supabase.from('fees').select('*').eq('student_id', id).order('month_year'),
     ]);
     setStudent(s || null);
     setAttendance(a || []);
+    setAllDojoAttendance(allA || []);
     setFees(f || []);
     setLoading(false);
   }, [id]);
@@ -59,18 +62,77 @@ export default function StudentPage() {
     return <main className="max-w-4xl mx-auto px-6 py-16 text-muted">Student not found.</main>;
   }
 
-  const totalClasses = attendance.length;
-  const present = attendance.filter((a) => a.present).length;
-  const rate = totalClasses ? Math.round((present / totalClasses) * 100) : 0;
+  const currentMonthKey = months[months.length - 1];
+
+  let activeMonthKey = currentMonthKey;
+  let activeDojoClassDates = Array.from(
+    new Set(
+      allDojoAttendance
+        .filter((entry) => entry.class_date.slice(0, 7) === currentMonthKey.slice(0, 7))
+        .map((entry) => entry.class_date)
+    )
+  );
+
+  if (activeDojoClassDates.length === 0) {
+    for (let i = months.length - 1; i >= 0; i--) {
+      const mDates = Array.from(
+        new Set(
+          allDojoAttendance
+            .filter((entry) => entry.class_date.slice(0, 7) === months[i].slice(0, 7))
+            .map((entry) => entry.class_date)
+        )
+      );
+      if (mDates.length > 0) {
+        activeMonthKey = months[i];
+        activeDojoClassDates = mDates;
+        break;
+      }
+    }
+  }
+
+  const studentAttendedInActiveMonth = activeDojoClassDates.filter((date) =>
+    attendance.some((entry) => entry.class_date === date && entry.present)
+  );
+
+  const totalClassesInActiveMonth = activeDojoClassDates.length || attendance.filter(a => a.class_date.slice(0, 7) === activeMonthKey.slice(0, 7)).length;
+  const attendedClassesInActiveMonth = studentAttendedInActiveMonth.length;
+  const rate = totalClassesInActiveMonth
+    ? Math.round((attendedClassesInActiveMonth / totalClassesInActiveMonth) * 100)
+    : 0;
 
   const chartData = months.map((m) => {
+    const dojoDatesInMonth = Array.from(
+      new Set(
+        allDojoAttendance
+          .filter((entry) => entry.class_date.slice(0, 7) === m.slice(0, 7))
+          .map((entry) => entry.class_date)
+      )
+    ).sort();
+
     const inMonth = attendance.filter((a) => a.class_date.slice(0, 7) === m.slice(0, 7));
-    const p = inMonth.filter((a) => a.present).length;
-    return { month: monthLabel(m).split(' ')[0], attended: p, total: inMonth.length };
+    const totalMonthClasses = dojoDatesInMonth.length || inMonth.length;
+
+    const checkDates = dojoDatesInMonth.length > 0 ? dojoDatesInMonth : inMonth.map((s) => s.class_date);
+    const attendedDates = checkDates.filter((date) =>
+      attendance.some((entry) => entry.class_date === date && entry.present)
+    );
+
+    const attendedDateLabels = attendedDates.map((d) => {
+      const dt = new Date(`${d}T00:00:00`);
+      return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short' }).format(dt);
+    });
+
+    return {
+      month: monthLabel(m).split(' ')[0],
+      fullMonth: monthLabel(m),
+      attended: attendedDates.length,
+      total: totalMonthClasses,
+      attendedDates: attendedDateLabels,
+      hasClasses: totalMonthClasses > 0,
+    };
   });
 
-  const currentMonth = months[months.length - 1];
-  const currentFee = fees.find((f) => f.month_year === currentMonth);
+  const currentFee = fees.find((f) => f.month_year === currentMonthKey);
   const feeDue = !currentFee?.paid;
   const unpaidMonths = months.filter((m) => {
     const f = fees.find((x) => x.month_year === m);
@@ -91,6 +153,31 @@ export default function StudentPage() {
   }
 
   const age = getAge(student.date_of_birth);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="rounded-sm border border-hairline bg-surface2 p-3 text-xs text-paper shadow-lg max-w-xs">
+          <p className="font-bold text-gold">{data.fullMonth}</p>
+          <p className="mt-1 font-semibold">
+            Attended: {data.attended} of {data.total} classes {data.total ? `(${Math.round((data.attended / data.total) * 100)}%)` : ''}
+          </p>
+          {data.attendedDates && data.attendedDates.length > 0 ? (
+            <div className="mt-2 border-t border-hairline/50 pt-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted mb-1">Class Dates Attended:</p>
+              <p className="text-moss font-mono text-[11px] leading-relaxed">
+                {data.attendedDates.join(', ')}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-[11px] text-muted italic">No classes attended this month</p>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <main className="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-14">
@@ -137,7 +224,7 @@ export default function StudentPage() {
         <div className="card rounded-sm p-5">
           <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Attendance rate</p>
           <p className="font-display text-4xl font-bold text-paper">{rate}<span className="text-lg text-muted">%</span></p>
-          <p className="text-xs text-muted mt-1">{present} of {totalClasses} classes</p>
+          <p className="text-xs text-muted mt-1">{attendedClassesInActiveMonth} of {totalClassesInActiveMonth} classes in {monthLabel(activeMonthKey)}</p>
         </div>
         <div className="card rounded-sm p-5">
           <p className="text-[11px] uppercase tracking-widest text-muted mb-2">This month's fee</p>
@@ -157,17 +244,14 @@ export default function StudentPage() {
 
       <div className="card rounded-sm p-5 sm:p-6 mb-10">
         <p className="font-display text-lg text-paper font-bold mb-1">Attendance, last 6 months</p>
-        <p className="text-muted text-xs mb-4">Classes attended per month</p>
+        <p className="text-muted text-xs mb-4">Classes attended per month & dates attended</p>
         <div style={{ width: '100%', height: 220 }}>
           <ResponsiveContainer>
             <BarChart data={chartData} barCategoryGap={20}>
               <CartesianGrid strokeDasharray="3 3" stroke="#3A322A" vertical={false} />
               <XAxis dataKey="month" stroke="#948B7E" fontSize={12} tickLine={false} axisLine={{ stroke: '#3A322A' }} />
               <YAxis stroke="#948B7E" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-              <Tooltip
-                contentStyle={{ background: '#26201A', border: '1px solid #3A322A', borderRadius: 2, color: '#EDE6D6' }}
-                labelStyle={{ color: '#D4A843' }}
-              />
+              <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="attended" radius={[2, 2, 0, 0]}>
                 {chartData.map((entry, i) => (
                   <Cell key={i} fill={entry.attended > 0 ? '#4C7A5E' : '#3A322A'} />
@@ -175,6 +259,31 @@ export default function StudentPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+
+        <div className="mt-6 border-t border-hairline/60 pt-4">
+          <p className="text-xs uppercase tracking-widest text-muted font-bold mb-3">Class Dates Attended by Month</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {chartData.filter((d) => d.hasClasses).map((d) => (
+              <div key={d.fullMonth} className="rounded-sm border border-hairline/60 bg-surface2/40 p-3">
+                <div className="flex items-center justify-between text-xs font-bold text-paper">
+                  <span>{d.fullMonth}</span>
+                  <span className="text-gold">{d.attended} / {d.total} classes ({d.total ? Math.round((d.attended / d.total) * 100) : 0}%)</span>
+                </div>
+                {d.attendedDates.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {d.attendedDates.map((dateLabel) => (
+                      <span key={dateLabel} className="rounded-sm bg-moss/20 border border-moss/40 px-2 py-0.5 text-[11px] text-moss font-mono">
+                        ✓ {dateLabel}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-muted italic">No classes attended</p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
