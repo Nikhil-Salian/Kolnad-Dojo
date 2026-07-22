@@ -1,0 +1,7 @@
+[
+  {
+    "email": "student@example.com",
+    "password": "generate-a-strong-password",
+    "students": [{ "id": "student-uuid-from-crm", "name": "Student Name" }]
+  }
+]

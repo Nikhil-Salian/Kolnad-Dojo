@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: #14110F;
+  color: #EDE6D6;
+}
+
+body {
+  font-family: var(--font-kaku), sans-serif;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('/bk.PNG');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.60;
+  z-index: -1;
+  /* mix-blend-mode: screen; */
+}
+
+::selection {
+  background: #C6362A;
+  color: #EDE6D6;
+}
+
+.bg-texture {
+  background-image:
+    radial-gradient(circle at 15% 8%, rgba(198, 54, 42, 0.01), transparent 40%),
+    radial-gradient(circle at 85% 92%, rgba(212, 168, 67, 0.07), transparent 45%);
+}
+
+.rope-divider {
+  height: 1px;
+  background: repeating-linear-gradient(90deg, #3A322A 0 6px, transparent 6px 10px);
+}
+
+.hanko {
+  box-shadow: 0 0 0 1.5px rgba(198, 54, 42, 0.55), 0 0 0 4px rgba(198, 54, 42, 0.12);
+}
+
+.card {
+  background: #1E1A16;
+  border: 1px solid #3A322A;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  .card {
+    border-radius: 0.9rem;
+  }
+
+  .mobile-friendly-heading {
+    gap: 0.85rem;
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #3A322A;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid #D4A843;
+  outline-offset: 2px;
+}
+
+/* Strong label style used for menu and section badges */
+.strong-label {
+  display: inline-block;
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.12), rgba(198, 54, 42, 0.06));
+  color: #EDE6D6;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.45rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  /*
+  White Belt Techniques:
+  Assume forward stance:
+   Down Block, reverse punch
+   Upper Block, reverse punch
+   Inner forearm block, reverse punch
+   Outer forearm block, reverse punch
+   Down block, double punch
+   Upper block, double punch
+   Inner forearm block, double punch
+   Outer forearm block, double punch
+  */
+  text-transform: uppercase;
+  box-shadow: 0 0 0 1px rgba(212, 168, 67, 0.06) inset;
+}
+
+.menu-button {
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
