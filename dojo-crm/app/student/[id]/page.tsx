@@ -28,6 +28,7 @@ export default function StudentPage() {
   const [savingBelt, setSavingBelt] = useState(false);
 
   const months = lastNMonths(6);
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,59 +63,99 @@ export default function StudentPage() {
     return <main className="max-w-4xl mx-auto px-6 py-16 text-muted">Student not found.</main>;
   }
 
-  const currentMonthKey = months[months.length - 1];
+  // --- Current Month (July 2026) Calculations ---
+  const currentMonthKey = months[months.length - 1]; // "2026-07"
 
-  let activeMonthKey = currentMonthKey;
-  let activeDojoClassDates = Array.from(
+  const julyDojoDates = Array.from(
     new Set(
       allDojoAttendance
         .filter((entry) => entry.class_date.slice(0, 7) === currentMonthKey.slice(0, 7))
         .map((entry) => entry.class_date)
     )
-  );
+  ).sort();
 
-  if (activeDojoClassDates.length === 0) {
-    for (let i = months.length - 1; i >= 0; i--) {
-      const mDates = Array.from(
-        new Set(
-          allDojoAttendance
-            .filter((entry) => entry.class_date.slice(0, 7) === months[i].slice(0, 7))
-            .map((entry) => entry.class_date)
-        )
-      );
-      if (mDates.length > 0) {
-        activeMonthKey = months[i];
-        activeDojoClassDates = mDates;
-        break;
-      }
-    }
-  }
-
-  const studentAttendedInActiveMonth = activeDojoClassDates.filter((date) =>
+  const julyAttendedDates = julyDojoDates.filter((date) =>
     attendance.some((entry) => entry.class_date === date && entry.present)
   );
 
-  const totalClassesInActiveMonth = activeDojoClassDates.length || attendance.filter(a => a.class_date.slice(0, 7) === activeMonthKey.slice(0, 7)).length;
-  const attendedClassesInActiveMonth = studentAttendedInActiveMonth.length;
-  const rate = totalClassesInActiveMonth
-    ? Math.round((attendedClassesInActiveMonth / totalClassesInActiveMonth) * 100)
+  const totalJulyClasses = julyDojoDates.length || attendance.filter((a) => a.class_date.slice(0, 7) === currentMonthKey.slice(0, 7)).length;
+  const attendedJulyClasses = julyAttendedDates.length;
+  const julyAttendanceRate = totalJulyClasses
+    ? Math.round((attendedJulyClasses / totalJulyClasses) * 100)
     : 0;
 
-  const chartData = months.map((m) => {
+  // Fee Status for Current Month (July 2026)
+  const monthlyFeeAmount = student.monthly_fee || 1000;
+  const julyFee = fees.find((entry) => entry.month_year === currentMonthKey);
+  const julyFeePaid = !!julyFee?.paid;
+  const julyFeeRemaining = julyFeePaid ? 0 : monthlyFeeAmount;
+
+  // --- Selected Month Breakdown with Month Navigation (< >) ---
+  const selectedMonthKey = months[selectedMonthIndex] || currentMonthKey;
+
+  const selectedDojoClassDates = Array.from(
+    new Set(
+      allDojoAttendance
+        .filter((entry) => entry.class_date.slice(0, 7) === selectedMonthKey.slice(0, 7))
+        .map((entry) => entry.class_date)
+    )
+  ).sort();
+
+  const studentInSelectedMonth = attendance.filter(
+    (entry) => entry.class_date.slice(0, 7) === selectedMonthKey.slice(0, 7)
+  );
+
+  const allClassDatesInSelectedMonth = Array.from(
+    new Set([...selectedDojoClassDates, ...studentInSelectedMonth.map((s) => s.class_date)])
+  ).sort();
+
+  const selectedMonthDateDetails = allClassDatesInSelectedMonth.map((dateStr) => {
+    const studentEntry = attendance.find((a) => a.class_date === dateStr);
+    const isPresent = !!studentEntry?.present;
+
+    const dt = new Date(`${dateStr}T00:00:00`);
+    const dateFormatted = new Intl.DateTimeFormat('en', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(dt);
+
+    return {
+      dateStr,
+      dateFormatted,
+      isPresent,
+    };
+  });
+
+  const selectedAttendedCount = selectedMonthDateDetails.filter((d) => d.isPresent).length;
+  const selectedTotalClasses = selectedMonthDateDetails.length;
+  const selectedRate = selectedTotalClasses ? Math.round((selectedAttendedCount / selectedTotalClasses) * 100) : 0;
+
+  const handlePrevMonth = () => setSelectedMonthIndex((prev) => Math.max(0, prev - 1));
+  const handleNextMonth = () => setSelectedMonthIndex((prev) => Math.min(months.length - 1, prev + 1));
+
+  // --- Recharts Data ---
+  const chartData = months.map((monthKey) => {
     const dojoDatesInMonth = Array.from(
       new Set(
         allDojoAttendance
-          .filter((entry) => entry.class_date.slice(0, 7) === m.slice(0, 7))
+          .filter((entry) => entry.class_date.slice(0, 7) === monthKey.slice(0, 7))
           .map((entry) => entry.class_date)
       )
     ).sort();
 
-    const inMonth = attendance.filter((a) => a.class_date.slice(0, 7) === m.slice(0, 7));
-    const totalMonthClasses = dojoDatesInMonth.length || inMonth.length;
+    const studentInMonth = attendance.filter((entry) => entry.class_date.slice(0, 7) === monthKey.slice(0, 7));
 
-    const checkDates = dojoDatesInMonth.length > 0 ? dojoDatesInMonth : inMonth.map((s) => s.class_date);
+    const checkDates = dojoDatesInMonth.length > 0 ? dojoDatesInMonth : studentInMonth.map((s) => s.class_date);
+    const totalMonthClasses = checkDates.length;
+
     const attendedDates = checkDates.filter((date) =>
       attendance.some((entry) => entry.class_date === date && entry.present)
+    );
+
+    const absentDates = checkDates.filter((date) =>
+      !attendance.some((entry) => entry.class_date === date && entry.present)
     );
 
     const attendedDateLabels = attendedDates.map((d) => {
@@ -122,18 +163,22 @@ export default function StudentPage() {
       return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short' }).format(dt);
     });
 
+    const absentDateLabels = absentDates.map((d) => {
+      const dt = new Date(`${d}T00:00:00`);
+      return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short' }).format(dt);
+    });
+
     return {
-      month: monthLabel(m).split(' ')[0],
-      fullMonth: monthLabel(m),
+      month: monthLabel(monthKey).split(' ')[0],
+      fullMonth: monthLabel(monthKey),
       attended: attendedDates.length,
       total: totalMonthClasses,
       attendedDates: attendedDateLabels,
+      absentDates: absentDateLabels,
       hasClasses: totalMonthClasses > 0,
     };
   });
 
-  const currentFee = fees.find((f) => f.month_year === currentMonthKey);
-  const feeDue = !currentFee?.paid;
   const unpaidMonths = months.filter((m) => {
     const f = fees.find((x) => x.month_year === m);
     return !f?.paid;
@@ -163,15 +208,21 @@ export default function StudentPage() {
           <p className="mt-1 font-semibold">
             Attended: {data.attended} of {data.total} classes {data.total ? `(${Math.round((data.attended / data.total) * 100)}%)` : ''}
           </p>
-          {data.attendedDates && data.attendedDates.length > 0 ? (
+          {data.attendedDates && data.attendedDates.length > 0 && (
             <div className="mt-2 border-t border-hairline/50 pt-1.5">
-              <p className="text-[10px] uppercase tracking-wider text-muted mb-1">Class Dates Attended:</p>
+              <p className="text-[10px] uppercase tracking-wider text-moss mb-1">✓ Present Dates:</p>
               <p className="text-moss font-mono text-[11px] leading-relaxed">
                 {data.attendedDates.join(', ')}
               </p>
             </div>
-          ) : (
-            <p className="mt-1 text-[11px] text-muted italic">No classes attended this month</p>
+          )}
+          {data.absentDates && data.absentDates.length > 0 && (
+            <div className="mt-1.5 border-t border-hairline/50 pt-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-seal mb-1">✗ Absent Dates:</p>
+              <p className="text-seal font-mono text-[11px] leading-relaxed">
+                {data.absentDates.join(', ')}
+              </p>
+            </div>
           )}
         </div>
       );
@@ -221,18 +272,27 @@ export default function StudentPage() {
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
+        {/* July Attendance Rate */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Attendance rate</p>
-          <p className="font-display text-4xl font-bold text-paper">{rate}<span className="text-lg text-muted">%</span></p>
-          <p className="text-xs text-muted mt-1">{attendedClassesInActiveMonth} of {totalClassesInActiveMonth} classes in {monthLabel(activeMonthKey)}</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">July Attendance Rate</p>
+          <p className="font-display text-4xl font-bold text-paper">{julyAttendanceRate}<span className="text-lg text-muted">%</span></p>
+          <p className="text-xs text-muted mt-1">{attendedJulyClasses} of {totalJulyClasses} classes in {monthLabel(currentMonthKey)}</p>
         </div>
+
+        {/* July Fee Remaining */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">This month's fee</p>
-          <p className={`font-display text-2xl font-bold ${feeDue ? 'text-seal' : 'text-moss'}`}>
-            {feeDue ? 'Unpaid' : 'Paid'}
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">July Fee Status</p>
+          <p className={`font-display text-2xl font-bold ${julyFeePaid ? 'text-moss' : 'text-seal'}`}>
+            {julyFeePaid ? 'Paid' : `₹${julyFeeRemaining.toLocaleString('en-IN')} Due`}
           </p>
-          <p className="text-xs text-muted mt-1">₹{student.monthly_fee} / month</p>
+          <p className="text-xs text-muted mt-1">
+            {julyFeePaid
+              ? `₹0 remaining for ${monthLabel(currentMonthKey)}`
+              : `₹${julyFeeRemaining.toLocaleString('en-IN')} pending for ${monthLabel(currentMonthKey)}`}
+          </p>
         </div>
+
+        {/* Outstanding Months */}
         <div className="card rounded-sm p-5">
           <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Outstanding months</p>
           <p className={`font-display text-4xl font-bold ${unpaidMonths.length ? 'text-seal' : 'text-moss'}`}>
@@ -243,47 +303,108 @@ export default function StudentPage() {
       </div>
 
       <div className="card rounded-sm p-5 sm:p-6 mb-10">
-        <p className="font-display text-lg text-paper font-bold mb-1">Attendance, last 6 months</p>
-        <p className="text-muted text-xs mb-4">Classes attended per month & dates attended</p>
+        <p className="font-display text-lg text-paper font-bold mb-1">Attendance overview</p>
+        <p className="text-muted text-xs mb-4">Classes attended per month (Click bar to select month)</p>
         <div style={{ width: '100%', height: 220 }}>
           <ResponsiveContainer>
-            <BarChart data={chartData} barCategoryGap={20}>
+            <BarChart
+              data={chartData}
+              barCategoryGap={20}
+              onClick={(e: any) => {
+                if (e && e.activeTooltipIndex !== undefined) {
+                  setSelectedMonthIndex(e.activeTooltipIndex);
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#3A322A" vertical={false} />
               <XAxis dataKey="month" stroke="#948B7E" fontSize={12} tickLine={false} axisLine={{ stroke: '#3A322A' }} />
               <YAxis stroke="#948B7E" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="attended" radius={[2, 2, 0, 0]}>
                 {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.attended > 0 ? '#4C7A5E' : '#3A322A'} />
+                  <Cell
+                    key={i}
+                    fill={i === selectedMonthIndex ? '#D4A843' : entry.attended > 0 ? '#4C7A5E' : '#3A322A'}
+                    stroke={i === selectedMonthIndex ? '#EDE6D6' : 'none'}
+                    strokeWidth={i === selectedMonthIndex ? 1.5 : 0}
+                    className="cursor-pointer transition-colors hover:opacity-80"
+                  />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-6 border-t border-hairline/60 pt-4">
-          <p className="text-xs uppercase tracking-widest text-muted font-bold mb-3">Class Dates Attended by Month</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {chartData.filter((d) => d.hasClasses).map((d) => (
-              <div key={d.fullMonth} className="rounded-sm border border-hairline/60 bg-surface2/40 p-3">
-                <div className="flex items-center justify-between text-xs font-bold text-paper">
-                  <span>{d.fullMonth}</span>
-                  <span className="text-gold">{d.attended} / {d.total} classes ({d.total ? Math.round((d.attended / d.total) * 100) : 0}%)</span>
-                </div>
-                {d.attendedDates.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {d.attendedDates.map((dateLabel) => (
-                      <span key={dateLabel} className="rounded-sm bg-moss/20 border border-moss/40 px-2 py-0.5 text-[11px] text-moss font-mono">
-                        ✓ {dateLabel}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-[11px] text-muted italic">No classes attended</p>
-                )}
-              </div>
-            ))}
+        {/* --- Month Breakdown with Left/Right (< >) Month Navigation --- */}
+        <div className="mt-6 border-t border-hairline/60 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-widest text-muted font-bold">Month Breakdown</p>
+              <h4 className="font-display text-xl font-bold text-paper mt-0.5 flex items-center gap-2">
+                <span>{monthLabel(selectedMonthKey)}</span>
+                <span className="text-xs font-normal text-gold bg-gold/10 px-2.5 py-1 rounded-sm border border-gold/30">
+                  {selectedAttendedCount} / {selectedTotalClasses} classes ({selectedRate}%)
+                </span>
+              </h4>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                disabled={selectedMonthIndex === 0}
+                className="rounded-sm border border-hairline bg-surface2 px-3 py-1.5 text-xs font-bold text-paper hover:bg-[#322A23] hover:border-gold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Previous
+              </button>
+              <span className="text-xs text-muted font-mono px-1">
+                {selectedMonthIndex + 1} / {months.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                disabled={selectedMonthIndex === months.length - 1}
+                className="rounded-sm border border-hairline bg-surface2 px-3 py-1.5 text-xs font-bold text-paper hover:bg-[#322A23] hover:border-gold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
           </div>
+
+          {selectedMonthDateDetails.length > 0 ? (
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {selectedMonthDateDetails.map((item) => (
+                <div
+                  key={item.dateStr}
+                  className={`rounded-sm border p-3 flex items-center justify-between transition-colors ${
+                    item.isPresent
+                      ? 'border-moss/40 bg-moss/10'
+                      : 'border-seal/40 bg-seal/10'
+                  }`}
+                >
+                  <div>
+                    <p className="text-xs font-bold text-paper">{item.dateFormatted}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted mt-0.5">
+                      Class Date
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-sm text-xs font-bold uppercase tracking-wide ${
+                      item.isPresent
+                        ? 'bg-moss text-paper'
+                        : 'bg-seal/30 text-seal border border-seal/40'
+                    }`}
+                  >
+                    {item.isPresent ? '✓ Present' : '✗ Absent'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-sm border border-hairline/60 bg-surface2/30 p-6 text-center">
+              <p className="text-sm text-muted">No dojo class dates recorded for {monthLabel(selectedMonthKey)}.</p>
+            </div>
+          )}
         </div>
       </div>
 
