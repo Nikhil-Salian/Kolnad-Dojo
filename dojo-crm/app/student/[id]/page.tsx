@@ -27,7 +27,7 @@ export default function StudentPage() {
   const [loading, setLoading] = useState(true);
   const [savingBelt, setSavingBelt] = useState(false);
 
-  const months = lastNMonths(6);
+  const months = lastNMonths(12);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   const load = useCallback(async () => {
@@ -63,8 +63,10 @@ export default function StudentPage() {
     return <main className="max-w-4xl mx-auto px-6 py-16 text-muted">Student not found.</main>;
   }
 
-  // --- Current Month (July 2026) Calculations ---
-  const currentMonthKey = months[months.length - 1]; // "2026-07"
+  // --- Current Month (actual current date) Calculations ---
+  // Always compute the actual current month dynamically from today's date
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
   const julyDojoDates = Array.from(
     new Set(

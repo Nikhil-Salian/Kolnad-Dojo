@@ -73,7 +73,7 @@ export default function PortalPage() {
   const [fees, setFees] = useState<Fee[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const months = useMemo(() => lastNMonths(6), []);
+  const months = useMemo(() => lastNMonths(12), []);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   async function loadPortalData(userEmail: string, targetStudentId?: string) {
@@ -220,8 +220,10 @@ export default function PortalPage() {
     setNotice(null);
   }
 
-  // --- Current Month (July 2026) Calculations ---
-  const currentMonthKey = months[months.length - 1]; // "2026-07"
+  // --- Current Month (actual current date) Calculations ---
+  // Always compute the actual current month dynamically from today's date
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
   const julyDojoDates = Array.from(
     new Set(
