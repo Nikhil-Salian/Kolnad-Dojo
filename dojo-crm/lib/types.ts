@@ -60,7 +60,10 @@ export function monthLabel(dateStr: string) {
 export function firstOfMonth(offsetMonths = 0) {
   const now = new Date();
   const d = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
-  return d.toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC conversion shifting the date (e.g. IST +5:30 → July 1 local = June 30 UTC)
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
 }
 
 export function lastNMonths(n: number) {
