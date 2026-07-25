@@ -270,6 +270,7 @@ export default function PortalPage() {
     : 0;
 
   // Overall Fee Status across all months up to and including current month
+  const age = getAge(student?.date_of_birth || null);
   const monthlyFeeAmount = student?.monthly_fee || 1000;
   const unpaidMonthsList = months.filter((mKey) => {
     if (mKey > currentMonthKey) return false;
@@ -670,9 +671,9 @@ export default function PortalPage() {
                     <div className="card rounded-sm p-5 sm:p-6">
                       <p className="font-display text-lg font-bold text-paper">Reminder note</p>
                       <p className="mt-3 text-sm leading-7 text-muted">
-                        {julyFeePaid
-                          ? 'Your July fee is already paid. You are all set for now.'
-                          : `Your July fee of ₹${julyFeeRemaining.toLocaleString('en-IN')} is still pending. Paying early helps keep your record up to date.`}
+                        {overallPendingAmount === 0
+                          ? 'Your fees are completely up to date. You are all set for now.'
+                          : `You have pending fees of ₹${overallPendingAmount.toLocaleString('en-IN')}${unpaidMonthLabels.length ? ` for ${unpaidMonthLabels.join(', ')}` : ''}. Paying early helps keep your record up to date.`}
                       </p>
                     </div>
                     <PortalProfileCard student={student} onUpdated={refreshPortalData} />
