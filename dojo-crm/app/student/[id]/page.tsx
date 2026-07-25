@@ -276,14 +276,14 @@ export default function StudentPage() {
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
         {/* July Attendance Rate */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">July Attendance Rate</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Attendance Rate</p>
           <p className="font-display text-4xl font-bold text-paper">{julyAttendanceRate}<span className="text-lg text-muted">%</span></p>
           <p className="text-xs text-muted mt-1">{attendedJulyClasses} of {totalJulyClasses} classes in {monthLabel(currentMonthKey)}</p>
         </div>
 
         {/* July Fee Remaining */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">July Fee Status</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Fee Status</p>
           <p className={`font-display text-2xl font-bold ${julyFeePaid ? 'text-moss' : 'text-seal'}`}>
             {julyFeePaid ? 'Paid' : `₹${julyFeeRemaining.toLocaleString('en-IN')} Due`}
           </p>

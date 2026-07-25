@@ -489,7 +489,7 @@ export default function PortalPage() {
                 <div className="grid gap-4 md:grid-cols-3">
                   {/* Current Month Attendance Rate */}
                   <div className="card rounded-sm p-5">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">July Attendance Rate</p>
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Attendance Rate</p>
                     <p className="mt-3 font-display text-4xl font-bold text-paper">{julyAttendanceRate}%</p>
                     <p className="mt-1 text-sm text-muted">
                       {attendedJulyClasses} of {totalJulyClasses} classes attended in {monthLabel(currentMonthKey)}
@@ -498,7 +498,7 @@ export default function PortalPage() {
 
                   {/* Current Month Fee Remaining */}
                   <div className="card rounded-sm p-5">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">July Fee Status</p>
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Fee Status</p>
                     <p className={`mt-3 font-display text-2xl font-bold ${julyFeePaid ? 'text-moss' : 'text-seal'}`}>
                       {julyFeePaid ? 'Paid' : `₹${julyFeeRemaining.toLocaleString('en-IN')} Due`}
                     </p>
