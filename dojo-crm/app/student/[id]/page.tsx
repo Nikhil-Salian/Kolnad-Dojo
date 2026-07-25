@@ -27,7 +27,7 @@ export default function StudentPage() {
   const [loading, setLoading] = useState(true);
   const [savingBelt, setSavingBelt] = useState(false);
 
-  const months = lastNMonths(12);
+  const months = lastNMonths(7);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   const load = useCallback(async () => {
@@ -319,7 +319,7 @@ export default function StudentPage() {
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#3A322A" vertical={false} />
-              <XAxis dataKey="month" stroke="#948B7E" fontSize={12} tickLine={false} axisLine={{ stroke: '#3A322A' }} />
+              <XAxis dataKey="month" stroke="#948B7E" fontSize={11} tickLine={false} axisLine={{ stroke: '#3A322A' }} interval={0} />
               <YAxis stroke="#948B7E" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="attended" radius={[2, 2, 0, 0]}>
