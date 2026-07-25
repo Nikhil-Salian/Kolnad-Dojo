@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ResponsiveContainer,
@@ -27,7 +27,28 @@ export default function StudentPage() {
   const [loading, setLoading] = useState(true);
   const [savingBelt, setSavingBelt] = useState(false);
 
-  const months = lastNMonths(7);
+  const months = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth();
+
+    const keysSet = new Set<string>();
+
+    for (let m = 0; m <= currentMonthIndex; m++) {
+      const monthStr = String(m + 1).padStart(2, '0');
+      keysSet.add(`${currentYear}-${monthStr}-01`);
+    }
+
+    allDojoAttendance.forEach((entry) => {
+      if (entry.class_date) keysSet.add(`${entry.class_date.slice(0, 7)}-01`);
+    });
+    attendance.forEach((entry) => {
+      if (entry.class_date) keysSet.add(`${entry.class_date.slice(0, 7)}-01`);
+    });
+
+    return Array.from(keysSet).sort();
+  }, [allDojoAttendance, attendance]);
+
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   const load = useCallback(async () => {
@@ -86,11 +107,15 @@ export default function StudentPage() {
     ? Math.round((attendedJulyClasses / totalJulyClasses) * 100)
     : 0;
 
-  // Fee Status for Current Month (July 2026)
+  // Overall Fee Status across all months up to and including current month
   const monthlyFeeAmount = student.monthly_fee || 1000;
-  const julyFee = fees.find((entry) => entry.month_year === currentMonthKey);
-  const julyFeePaid = !!julyFee?.paid;
-  const julyFeeRemaining = julyFeePaid ? 0 : monthlyFeeAmount;
+  const unpaidMonthsList = months.filter((mKey) => {
+    if (mKey > currentMonthKey) return false;
+    const feeRecord = fees.find((f) => f.month_year === mKey);
+    return !feeRecord?.paid;
+  });
+  const overallPendingAmount = unpaidMonthsList.length * monthlyFeeAmount;
+  const unpaidMonthLabels = unpaidMonthsList.map((mKey) => monthLabel(mKey).split(' ')[0]);
 
   // --- Selected Month Breakdown with Month Navigation (< >) ---
   const selectedMonthKey = months[selectedMonthIndex] || currentMonthKey;
@@ -274,33 +299,33 @@ export default function StudentPage() {
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
-        {/* July Attendance Rate */}
+        {/* Current Month Attendance Rate */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Attendance Rate</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">{monthLabel(currentMonthKey)} Attendance Rate</p>
           <p className="font-display text-4xl font-bold text-paper">{julyAttendanceRate}<span className="text-lg text-muted">%</span></p>
           <p className="text-xs text-muted mt-1">{attendedJulyClasses} of {totalJulyClasses} classes in {monthLabel(currentMonthKey)}</p>
         </div>
 
-        {/* July Fee Remaining */}
+        {/* Overall Pending Fee Status */}
         <div className="card rounded-sm p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Fee Status</p>
-          <p className={`font-display text-2xl font-bold ${julyFeePaid ? 'text-moss' : 'text-seal'}`}>
-            {julyFeePaid ? 'Paid' : `₹${julyFeeRemaining.toLocaleString('en-IN')} Due`}
+          <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Overall Fee Status</p>
+          <p className={`font-display text-2xl font-bold ${overallPendingAmount === 0 ? 'text-moss' : 'text-seal'}`}>
+            {overallPendingAmount === 0 ? 'Paid' : `₹${overallPendingAmount.toLocaleString('en-IN')} Due`}
           </p>
           <p className="text-xs text-muted mt-1">
-            {julyFeePaid
-              ? `₹0 remaining for ${monthLabel(currentMonthKey)}`
-              : `₹${julyFeeRemaining.toLocaleString('en-IN')} pending for ${monthLabel(currentMonthKey)}`}
+            {overallPendingAmount === 0
+              ? `₹0 remaining up to ${monthLabel(currentMonthKey)}`
+              : `${unpaidMonthsList.length} month${unpaidMonthsList.length > 1 ? 's' : ''} pending (${unpaidMonthLabels.join(', ')})`}
           </p>
         </div>
 
         {/* Outstanding Months */}
         <div className="card rounded-sm p-5">
           <p className="text-[11px] uppercase tracking-widest text-muted mb-2">Outstanding months</p>
-          <p className={`font-display text-4xl font-bold ${unpaidMonths.length ? 'text-seal' : 'text-moss'}`}>
-            {unpaidMonths.length}
+          <p className={`font-display text-4xl font-bold ${unpaidMonthsList.length ? 'text-seal' : 'text-moss'}`}>
+            {unpaidMonthsList.length}
           </p>
-          <p className="text-xs text-muted mt-1">of last {months.length} months</p>
+          <p className="text-xs text-muted mt-1">of {months.length} recorded months</p>
         </div>
       </div>
 

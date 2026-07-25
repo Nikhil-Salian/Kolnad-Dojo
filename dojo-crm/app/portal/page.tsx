@@ -72,8 +72,34 @@ export default function PortalPage() {
   const [allDojoAttendance, setAllDojoAttendance] = useState<Array<{ class_date: string; student_id: string; present: boolean }>>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
-  const months = useMemo(() => lastNMonths(7), []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const months = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth();
+
+    const keysSet = new Set<string>();
+
+    for (let m = 0; m <= currentMonthIndex; m++) {
+      const monthStr = String(m + 1).padStart(2, '0');
+      keysSet.add(`${currentYear}-${monthStr}-01`);
+    }
+
+    allDojoAttendance.forEach((entry) => {
+      if (entry.class_date) keysSet.add(`${entry.class_date.slice(0, 7)}-01`);
+    });
+    attendance.forEach((entry) => {
+      if (entry.class_date) keysSet.add(`${entry.class_date.slice(0, 7)}-01`);
+    });
+
+    return Array.from(keysSet).sort();
+  }, [allDojoAttendance, attendance]);
+
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(months.length - 1);
 
   async function loadPortalData(userEmail: string, targetStudentId?: string) {
@@ -243,11 +269,15 @@ export default function PortalPage() {
     ? Math.round((attendedJulyClasses / totalJulyClasses) * 100)
     : 0;
 
-  // Fee Status for Current Month (July 2026)
+  // Overall Fee Status across all months up to and including current month
   const monthlyFeeAmount = student?.monthly_fee || 1000;
-  const julyFee = fees.find((entry) => entry.month_year === currentMonthKey);
-  const julyFeePaid = !!julyFee?.paid;
-  const julyFeeRemaining = julyFeePaid ? 0 : monthlyFeeAmount;
+  const unpaidMonthsList = months.filter((mKey) => {
+    if (mKey > currentMonthKey) return false;
+    const feeRecord = fees.find((f) => f.month_year === mKey);
+    return !feeRecord?.paid;
+  });
+  const overallPendingAmount = unpaidMonthsList.length * monthlyFeeAmount;
+  const unpaidMonthLabels = unpaidMonthsList.map((mKey) => monthLabel(mKey).split(' ')[0]);
 
   // --- Selected Month Breakdown with Month Navigation (< >) ---
   const selectedMonthKey = months[selectedMonthIndex] || currentMonthKey;
@@ -342,7 +372,13 @@ export default function PortalPage() {
   const outstandingMonths = months.filter((month) => !fees.find((entry) => entry.month_year === month)?.paid);
   const refreshPortalData = () => setRefreshKey((value) => value + 1);
   const monthsPaid = fees.filter((entry) => entry.paid).length;
-  const age = getAge(student?.date_of_birth ?? null);
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-texture px-4 py-8 sm:px-6 lg:px-8 flex items-center justify-center text-paper">
+        <div className="card rounded-sm p-8 text-center text-muted font-body">Loading portal…</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-texture px-4 py-8 sm:px-6 lg:px-8">
@@ -489,31 +525,31 @@ export default function PortalPage() {
                 <div className="grid gap-4 md:grid-cols-3">
                   {/* Current Month Attendance Rate */}
                   <div className="card rounded-sm p-5">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Attendance Rate</p>
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">{monthLabel(currentMonthKey)} Attendance Rate</p>
                     <p className="mt-3 font-display text-4xl font-bold text-paper">{julyAttendanceRate}%</p>
                     <p className="mt-1 text-sm text-muted">
                       {attendedJulyClasses} of {totalJulyClasses} classes attended in {monthLabel(currentMonthKey)}
                     </p>
                   </div>
 
-                  {/* Current Month Fee Remaining */}
+                  {/* Overall Pending Fee Status */}
                   <div className="card rounded-sm p-5">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Fee Status</p>
-                    <p className={`mt-3 font-display text-2xl font-bold ${julyFeePaid ? 'text-moss' : 'text-seal'}`}>
-                      {julyFeePaid ? 'Paid' : `₹${julyFeeRemaining.toLocaleString('en-IN')} Due`}
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Overall Fee Status</p>
+                    <p className={`mt-3 font-display text-2xl font-bold ${overallPendingAmount === 0 ? 'text-moss' : 'text-seal'}`}>
+                      {overallPendingAmount === 0 ? 'Paid' : `₹${overallPendingAmount.toLocaleString('en-IN')} Due`}
                     </p>
                     <p className="mt-1 text-sm text-muted">
-                      {julyFeePaid
-                        ? `₹0 remaining for ${monthLabel(currentMonthKey)}`
-                        : `₹${julyFeeRemaining.toLocaleString('en-IN')} pending for ${monthLabel(currentMonthKey)}`}
+                      {overallPendingAmount === 0
+                        ? `₹0 remaining up to ${monthLabel(currentMonthKey)}`
+                        : `${unpaidMonthsList.length} month${unpaidMonthsList.length > 1 ? 's' : ''} pending (${unpaidMonthLabels.join(', ')})`}
                     </p>
                   </div>
 
                   {/* Reminder Status */}
                   <div className="card rounded-sm p-5">
                     <p className="text-[11px] uppercase tracking-[0.3em] text-muted">Reminder status</p>
-                    <p className={`mt-3 font-display text-2xl font-bold ${outstandingMonths.length ? 'text-seal' : 'text-moss'}`}>
-                      {outstandingMonths.length ? 'Needed' : 'On track'}
+                    <p className={`mt-3 font-display text-2xl font-bold ${unpaidMonthsList.length ? 'text-seal' : 'text-moss'}`}>
+                      {unpaidMonthsList.length ? 'Action Needed' : 'On track'}
                     </p>
                     <p className="mt-1 text-sm text-muted">{monthsPaid} paid months recorded</p>
                   </div>
