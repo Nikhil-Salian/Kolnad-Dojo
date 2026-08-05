@@ -121,6 +121,23 @@ Here are tailored resume bullet points you can use based on this project:
   - Implemented interactive data visualizations with **Recharts**, delivering monthly attendance participation charts with custom interactive tooltips.
   - Optimized database operations using **atomic PostgreSQL upsert queries** to eliminate race conditions during concurrent fee ledger updates.
   - Architected a multi-profile authentication flow supporting family email sharing across multiple enrolled students, complete with timezone-safe date math for IST/UTC compatibility.
+  - **Automated Gmail Fee Reminders**: Configured scheduled end-of-month fee reminder emails via Gmail SMTP (`Nodemailer` + Vercel Cron), alongside an instant manual trigger in the Sensei Fee Ledger dashboard.
+
+---
+
+## 📧 Gmail Fee Reminders Setup
+
+To send automated fee reminders from your personal/dojo Gmail address:
+
+1. **Enable 2-Step Verification** on your Google Account: [Google Security Settings](https://myaccount.google.com/security).
+2. **Generate a Gmail App Password**: Go to [App Passwords](https://myaccount.google.com/apppasswords), create an password named `Kolnad Dojo CRM`.
+3. Add the credentials to `.env.local` (or Vercel Environment Variables):
+   ```env
+   GMAIL_USER="your-email@gmail.com"
+   GMAIL_APP_PASSWORD="xxxx xxxx xxxx xxxx"
+   CRON_SECRET="your-secure-cron-secret-token"
+   ```
+4. **Schedule**: The system automatically dispatches emails to active unpaid students at **23:59 on the last day of every month**. You can also click **"✉️ Send Gmail Reminders"** in the Fee Ledger dashboard at any time.
 
 ---
 

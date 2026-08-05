@@ -11,6 +11,22 @@ export default function FeesSection() {
   const [loading, setLoading] = useState(true);
   const months = useMemo(() => lastNMonths(6), []);
 
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
+  const [reminderResult, setReminderResult] = useState<{
+    ok?: boolean;
+    error?: string;
+    summary?: {
+      totalActive: number;
+      paidCount: number;
+      unpaidCount: number;
+      sentCount: number;
+      skippedNoEmailCount: number;
+      failedCount: number;
+    };
+    results?: Array<{ name: string; email: string | null; status: string; error?: string }>;
+  } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: st }, { data: fe }] = await Promise.all([
@@ -32,7 +48,7 @@ export default function FeesSection() {
 
   async function toggle(student: Student, month: string) {
     const existing = feeFor(student.id, month);
-    const nextPaid = !(existing?.paid);
+    const nextPaid = !existing?.paid;
     const { data, error } = await supabase
       .from('fees')
       .upsert(
@@ -58,6 +74,24 @@ export default function FeesSection() {
   const currentMonth = months[months.length - 1];
   const unpaidThisMonth = students.filter((s) => !feeFor(s.id, currentMonth)?.paid);
 
+  async function handleSendReminders() {
+    setSendingReminders(true);
+    setReminderResult(null);
+    try {
+      const res = await fetch('/api/send-fee-reminders?force=true', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      setReminderResult(data);
+    } catch (err: unknown) {
+      setReminderResult({
+        error: err instanceof Error ? err.message : 'Failed to send reminders',
+      });
+    } finally {
+      setSendingReminders(false);
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -65,10 +99,21 @@ export default function FeesSection() {
           <h2 className="font-display text-2xl text-paper font-bold">Fee Ledger</h2>
           <p className="text-muted text-sm mt-1">Tap a month to mark it paid. Last 6 months shown.</p>
         </div>
-        <div className="card rounded-sm px-4 py-2.5 text-sm">
-          <span className="text-muted">Outstanding this month: </span>
-          <span className="text-seal font-bold">{unpaidThisMonth.length}</span>
-          <span className="text-muted"> / {students.length}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              setReminderResult(null);
+              setShowReminderModal(true);
+            }}
+            className="btn btn-secondary text-xs sm:text-sm py-2 px-3 flex items-center gap-2"
+          >
+            ✉️ Send Gmail Reminders
+          </button>
+          <div className="card rounded-sm px-4 py-2.5 text-sm">
+            <span className="text-muted">Outstanding this month: </span>
+            <span className="text-seal font-bold">{unpaidThisMonth.length}</span>
+            <span className="text-muted"> / {students.length}</span>
+          </div>
         </div>
       </div>
 
@@ -83,6 +128,7 @@ export default function FeesSection() {
         </div>
       ) : (
         <div className="grid gap-4">
+          {/* Mobile Card Roster View */}
           <div className="sm:hidden grid gap-3">
             {students.map((s) => (
               <div key={s.id} className="card rounded-sm p-4">
@@ -120,6 +166,7 @@ export default function FeesSection() {
             ))}
           </div>
 
+          {/* Desktop Table View */}
           <div className="hidden sm:block card rounded-sm overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm min-w-[720px]">
               <thead>
@@ -165,6 +212,103 @@ export default function FeesSection() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Gmail Fee Reminder Modal */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="card rounded-sm w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowReminderModal(false)}
+              className="absolute top-4 right-4 text-muted hover:text-paper text-lg font-bold"
+            >
+              ✕
+            </button>
+            <h3 className="font-display text-xl font-bold text-paper flex items-center gap-2">
+              <span>✉️</span> Gmail Fee Reminders
+            </h3>
+            <p className="text-muted text-sm mt-1">
+              Send fee pending notice for <strong className="text-gold">{monthLabel(currentMonth)}</strong>.
+            </p>
+
+            <div className="mt-4 p-3 bg-surface2/60 border border-hairline rounded-sm text-xs text-muted leading-relaxed">
+              💡 <strong>Automated Schedule:</strong> Emails are sent automatically on the <strong>last day of every month</strong> via your Gmail SMTP settings (`GMAIL_USER`). You can also click below to dispatch reminders manually right now.
+            </div>
+
+            <div className="mt-5">
+              <h4 className="font-body text-xs uppercase tracking-widest text-muted mb-2 font-bold">
+                Unpaid Active Students ({unpaidThisMonth.length})
+              </h4>
+
+              {unpaidThisMonth.length === 0 ? (
+                <p className="text-moss text-sm font-semibold p-4 text-center bg-moss/10 rounded-sm">
+                  🎉 All active students have paid their fees for {monthLabel(currentMonth)}!
+                </p>
+              ) : (
+                <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
+                  {unpaidThisMonth.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between p-2.5 bg-surface2 rounded-sm text-sm">
+                      <div>
+                        <span className="font-bold text-paper">{s.full_name}</span>
+                        <div className="text-xs text-muted">{s.email ? s.email : '⚠️ No email linked'}</div>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded font-bold ${s.email ? 'bg-moss/20 text-moss' : 'bg-seal/20 text-seal'}`}>
+                        {s.email ? 'Ready' : 'Missing Email'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {reminderResult && (
+              <div className="mt-4 p-3 rounded-sm text-xs border" style={{
+                backgroundColor: reminderResult.error ? '#2C1517' : '#14251B',
+                borderColor: reminderResult.error ? '#8B261D' : '#4C7A5E',
+              }}>
+                {reminderResult.error ? (
+                  <p className="text-seal font-bold">⚠️ Error: {reminderResult.error}</p>
+                ) : (
+                  <div>
+                    <p className="text-moss font-bold mb-1">
+                      ✅ Reminders Processed! (Sent: {reminderResult.summary?.sentCount || 0}, Skipped without Email: {reminderResult.summary?.skippedNoEmailCount || 0}, Failed: {reminderResult.summary?.failedCount || 0})
+                    </p>
+                    {reminderResult.results && reminderResult.results.length > 0 && (
+                      <div className="mt-2 space-y-1 max-h-32 overflow-y-auto text-[11px] text-muted">
+                        {reminderResult.results.map((r, i) => (
+                          <div key={i} className="flex justify-between border-b border-white/5 py-0.5">
+                            <span>{r.name}</span>
+                            <span className={r.status === 'sent' ? 'text-moss font-bold' : r.status === 'failed' ? 'text-seal' : 'text-muted'}>
+                              {r.status === 'sent' ? 'Sent ✉️' : r.status === 'already_paid' ? 'Paid ✓' : r.status === 'skipped_no_email' ? 'No Email' : `Failed (${r.error})`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowReminderModal(false)}
+                className="btn text-xs py-2 px-4 border border-hairline text-muted hover:text-paper"
+              >
+                Close
+              </button>
+              {unpaidThisMonth.length > 0 && (
+                <button
+                  onClick={handleSendReminders}
+                  disabled={sendingReminders}
+                  className="btn btn-primary text-xs py-2 px-4 flex items-center gap-2"
+                >
+                  {sendingReminders ? 'Sending Emails...' : ' Send Reminders Now'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
