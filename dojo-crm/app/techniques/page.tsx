@@ -128,8 +128,8 @@ export default function TechniquesPage() {
               Explore techniques by belt level, styled as a visual learning gallery for students.
             </p>
           </div>
-          <Link href="/" className="rounded-sm border border-hairline px-3 py-2 text-sm text-paper transition-colors hover:bg-surface2">
-            Back to home
+          <Link href="/portal" className="rounded-sm border border-hairline px-3 py-2 text-sm text-paper transition-colors hover:bg-surface2">
+            Back to portal
           </Link>
         </header>
 

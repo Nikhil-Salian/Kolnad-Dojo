@@ -27,8 +27,8 @@ export default function KataKumitePage() {
               <p className="font-display text-2xl font-bold text-paper">PDF resource</p>
               <p className="mt-2 text-sm text-muted">Upload your kata and kumite PDF here for students to access.</p>
             </div>
-            <Link href="/" className="rounded-sm border border-hairline px-3 py-2 text-sm text-paper transition-colors hover:bg-surface2">
-              Back to home
+            <Link href="/portal" className="rounded-sm border border-hairline px-3 py-2 text-sm text-paper transition-colors hover:bg-surface2">
+              Back to portal
             </Link>
           </div>
 

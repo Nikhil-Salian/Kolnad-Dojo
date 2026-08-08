@@ -259,12 +259,6 @@ export default function StudentPage() {
 
   return (
     <main className="max-w-4xl mx-auto px-4 sm:px-8 py-10 sm:py-14">
-      <button
-        onClick={() => router.push('/')}
-        className="text-muted hover:text-gold text-sm font-body mb-8 inline-flex items-center gap-1.5"
-      >
-        ← Back to register
-      </button>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] items-start mb-10">
         <div className="flex items-start gap-4">
