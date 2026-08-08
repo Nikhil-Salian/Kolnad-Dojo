@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   ResponsiveContainer,
   BarChart,
@@ -390,9 +389,6 @@ export default function PortalPage() {
             <h1 className="font-display text-2xl font-bold text-paper">Student portal</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-muted transition-colors hover:text-paper">
-              Back to register
-            </Link>
             {mode === 'dashboard' && (
               <button
                 type="button"
