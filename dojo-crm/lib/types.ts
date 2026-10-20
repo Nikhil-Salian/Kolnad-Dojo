@@ -70,6 +70,22 @@ export function studentHasFeeMonth(student: Pick<Student, 'join_date'>, month: s
   return !student.join_date || month >= `${student.join_date.slice(0, 7)}-01`;
 }
 
+export function monthsFromJoinDateThrough(joinDate: string | null | undefined, throughMonth: string) {
+  const joinMonth = joinDate?.slice(0, 7);
+  const startMonth = joinMonth && /^\d{4}-\d{2}$/.test(joinMonth)
+    ? `${joinMonth}-01`
+    : throughMonth;
+  if (startMonth > throughMonth) return [];
+
+  const [startYear, startMonthNumber] = startMonth.slice(0, 7).split('-').map(Number);
+  const [endYear, endMonthNumber] = throughMonth.slice(0, 7).split('-').map(Number);
+  const monthCount = (endYear - startYear) * 12 + endMonthNumber - startMonthNumber;
+  return Array.from({ length: monthCount + 1 }, (_, offset) => {
+    const date = new Date(startYear, startMonthNumber - 1 + offset, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+}
+
 export function lastNMonths(n: number) {
   const arr: string[] = [];
   for (let i = n - 1; i >= 0; i--) arr.push(firstOfMonth(-i));

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { Student, Fee, lastNMonths, monthLabel, studentHasFeeMonth } from '@/lib/types';
+import { Student, Fee, firstOfMonth, lastNMonths, monthLabel, monthsFromJoinDateThrough, studentHasFeeMonth } from '@/lib/types';
 import BeltTag from './BeltTag';
 
 export default function FeesSection() {
@@ -19,8 +19,8 @@ export default function FeesSection() {
   const [whatsAppResult, setWhatsAppResult] = useState<{
     ok?: boolean;
     error?: string;
-    summary?: { sentCount: number; skippedNoPhoneCount: number; failedCount: number; paidCount: number };
-    results?: Array<{ name: string; status: string; error?: string }>;
+    summary?: { sentCount: number; skippedNoPhoneCount: number; failedCount: number; noPendingFeesCount: number };
+    results?: Array<{ name: string; status: string; pendingMonths?: string[]; amount?: number; error?: string }>;
   } | null>(null);
   const [reminderResult, setReminderResult] = useState<{
     ok?: boolean;
@@ -40,7 +40,7 @@ export default function FeesSection() {
     setLoading(true);
     const [{ data: st }, { data: fe }] = await Promise.all([
       supabase.from('students').select('*').eq('active', true).order('full_name'),
-      supabase.from('fees').select('*').gte('month_year', months[0]),
+      supabase.from('fees').select('*').lte('month_year', firstOfMonth()),
     ]);
     setStudents(st || []);
     setFees(fe || []);
@@ -84,6 +84,23 @@ export default function FeesSection() {
   const unpaidThisMonth = students.filter(
     (s) => studentHasFeeMonth(s, currentMonth) && !feeFor(s.id, currentMonth)?.paid
   );
+  const pendingBalances = students.map((student) => {
+    const pending = monthsFromJoinDateThrough(student.join_date, currentMonth)
+      .flatMap((month) => {
+        const fee = feeFor(student.id, month);
+        if (fee?.paid) return [];
+        return [{
+          month: monthLabel(month),
+          amount: fee?.amount ?? student.monthly_fee ?? 0,
+        }];
+      });
+    return {
+      student,
+      pending,
+      total: pending.reduce((sum, fee) => sum + fee.amount, 0),
+    };
+  }).filter(({ pending }) => pending.length > 0);
+  const studentsWithPhone = pendingBalances.filter(({ student }) => student.phone?.trim());
 
   async function handleSendReminders() {
     setSendingReminders(true);
@@ -282,10 +299,10 @@ export default function FeesSection() {
             </button>
             <h3 className="font-display text-xl font-bold text-paper">💬 WhatsApp Fee Reminders</h3>
             <p className="text-muted text-sm mt-1">
-              Send the pending fee reminder for <strong className="text-gold">{monthLabel(currentMonth)}</strong> to unpaid students with a phone number.
+              Send each student’s complete outstanding balance through <strong className="text-gold">{monthLabel(currentMonth)}</strong>.
             </p>
             <div className="mt-4 p-3 bg-surface2/60 border border-hairline rounded-sm text-xs text-muted leading-relaxed">
-              Automatic reminders are scheduled for the 1st of each month. Manual sending requires the configured CRON_SECRET. Phone numbers must include their country code, and the Meta WhatsApp template must be approved.
+              Each reminder includes the unpaid months and their combined total. The manual sending key is your own CRON_SECRET value from the app/deployment environment settings; it is not a Meta or WhatsApp API key. Phone numbers must include their country code, and the Meta WhatsApp template must be approved.
             </div>
             <label className="block mt-4 text-[11px] uppercase tracking-widest text-muted mb-1.5">
               Manual sending key
@@ -298,8 +315,21 @@ export default function FeesSection() {
                 className="mt-1.5 w-full bg-surface2 border border-hairline rounded-sm px-3 py-2 text-paper placeholder:text-muted/60 focus:border-gold outline-none normal-case tracking-normal"
               />
             </label>
-            <p className="mt-3 text-xs text-muted">
-              Unpaid students: {unpaidThisMonth.length}; with phone: {unpaidThisMonth.filter((s) => s.phone?.trim()).length}
+            <div className="mt-3 grid gap-2 max-h-48 overflow-y-auto">
+              {pendingBalances.length === 0 ? (
+                <p className="text-sm text-moss">No pending balances.</p>
+              ) : pendingBalances.map(({ student, pending, total }) => (
+                <div key={student.id} className="rounded-sm bg-surface2 p-2.5 text-xs">
+                  <p className="font-bold text-paper">
+                    {student.full_name} — ₹{total.toLocaleString('en-IN')}
+                    {!student.phone?.trim() && <span className="ml-2 text-seal">No phone</span>}
+                  </p>
+                  <p className="mt-1 text-muted">{pending.map((fee) => fee.month).join(', ')}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              WhatsApp recipients: {studentsWithPhone.length} of {pendingBalances.length} students with pending balances.
             </p>
             {whatsAppResult && (
               <div className={`mt-4 p-3 rounded-sm text-xs border ${whatsAppResult.error ? 'bg-[#2C1517] border-seal' : 'bg-[#14251B] border-moss'}`}>
@@ -308,11 +338,13 @@ export default function FeesSection() {
                 ) : (
                   <>
                     <p className="text-moss font-bold">
-                      Processed — sent: {whatsAppResult.summary?.sentCount || 0}, missing phone: {whatsAppResult.summary?.skippedNoPhoneCount || 0}, failed: {whatsAppResult.summary?.failedCount || 0}, paid: {whatsAppResult.summary?.paidCount || 0}
+                      Processed — sent: {whatsAppResult.summary?.sentCount || 0}, missing phone: {whatsAppResult.summary?.skippedNoPhoneCount || 0}, failed: {whatsAppResult.summary?.failedCount || 0}, no balance due: {whatsAppResult.summary?.noPendingFeesCount || 0}
                     </p>
                     {whatsAppResult.results?.map((result, index) => (
                       <p key={`${result.name}-${index}`} className="mt-1 text-muted">
-                        {result.name}: {result.status}{result.error ? ` — ${result.error}` : ''}
+                        {result.name}: {result.status}
+                        {result.pendingMonths?.length ? ` — ${result.pendingMonths.join(', ')} — ₹${result.amount?.toLocaleString('en-IN')}` : ''}
+                        {result.error ? ` — ${result.error}` : ''}
                       </p>
                     ))}
                   </>
@@ -328,7 +360,7 @@ export default function FeesSection() {
               </button>
               <button
                 onClick={handleSendWhatsAppReminders}
-                disabled={sendingWhatsApp || !whatsAppSecret.trim() || unpaidThisMonth.length === 0}
+                disabled={sendingWhatsApp || !whatsAppSecret.trim() || studentsWithPhone.length === 0}
                 className="btn btn-primary text-xs py-2 px-4 disabled:opacity-50"
               >
                 {sendingWhatsApp ? 'Sending…' : 'Send WhatsApp Reminders'}

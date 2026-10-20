@@ -1,7 +1,7 @@
 type WhatsAppReminderOptions = {
   phone: string;
   studentName: string;
-  monthName: string;
+  pendingMonths: string[];
   amount: number;
 };
 
@@ -38,7 +38,7 @@ export function isWhatsAppConfigured() {
 export async function sendWhatsAppFeeReminder({
   phone,
   studentName,
-  monthName,
+  pendingMonths,
   amount,
 }: WhatsAppReminderOptions) {
   const config = getWhatsAppConfig();
@@ -68,7 +68,7 @@ export async function sendWhatsAppFeeReminder({
               type: 'body',
               parameters: [
                 { type: 'text', text: studentName },
-                { type: 'text', text: monthName },
+                { type: 'text', text: pendingMonths.join(', ') },
                 { type: 'text', text: `₹${amount.toLocaleString('en-IN')}` },
               ],
             },

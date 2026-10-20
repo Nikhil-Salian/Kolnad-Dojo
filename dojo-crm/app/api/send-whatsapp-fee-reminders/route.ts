@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { supabase } from '@/lib/supabaseClient';
-import { firstOfMonth, monthLabel, Fee, Student, studentHasFeeMonth } from '@/lib/types';
+import { firstOfMonth, monthLabel, Fee, Student, monthsFromJoinDateThrough } from '@/lib/types';
 import { isWhatsAppConfigured, sendWhatsAppFeeReminder } from '@/lib/whatsapp';
 
 export async function GET(request: Request) {
@@ -45,7 +45,6 @@ async function handleReminders(request: Request, mode: 'cron' | 'manual') {
 
   const db = supabaseAdmin || supabase;
   const currentMonth = firstOfMonth();
-  const label = monthLabel(currentMonth);
 
   const { data: students, error: studentError } = await db
     .from('students')
@@ -63,37 +62,42 @@ async function handleReminders(request: Request, mode: 'cron' | 'manual') {
   const { data: fees, error: feeError } = await db
     .from('fees')
     .select('*')
-    .eq('month_year', currentMonth);
+    .lte('month_year', currentMonth);
 
   if (feeError) {
     return NextResponse.json({ error: feeError.message }, { status: 500 });
   }
 
   const feeMap = new Map<string, Fee>();
-  (fees || []).forEach((fee: Fee) => feeMap.set(fee.student_id, fee));
+  (fees || []).forEach((fee: Fee) => feeMap.set(`${fee.student_id}:${fee.month_year}`, fee));
 
   const results: Array<{
     studentId: string;
     name: string;
-    status: 'sent' | 'skipped_no_phone' | 'already_paid' | 'before_enrollment' | 'failed';
+    status: 'sent' | 'skipped_no_phone' | 'no_pending_fees' | 'failed';
+    pendingMonths?: string[];
+    amount?: number;
     error?: string;
   }> = [];
   let sentCount = 0;
   let skippedNoPhoneCount = 0;
-  let paidCount = 0;
-  let beforeEnrollmentCount = 0;
+  let noPendingFeesCount = 0;
   let failedCount = 0;
 
   for (const student of students as Student[]) {
-    if (!studentHasFeeMonth(student, currentMonth)) {
-      beforeEnrollmentCount++;
-      results.push({ studentId: student.id, name: student.full_name, status: 'before_enrollment' });
-      continue;
-    }
+    const pendingFees = monthsFromJoinDateThrough(student.join_date, currentMonth)
+      .flatMap((month) => {
+        const fee = feeMap.get(`${student.id}:${month}`);
+        if (fee?.paid) return [];
+        return [{
+          month,
+          amount: fee?.amount ?? student.monthly_fee ?? 0,
+        }];
+      });
 
-    if (feeMap.get(student.id)?.paid) {
-      paidCount++;
-      results.push({ studentId: student.id, name: student.full_name, status: 'already_paid' });
+    if (pendingFees.length === 0) {
+      noPendingFeesCount++;
+      results.push({ studentId: student.id, name: student.full_name, status: 'no_pending_fees' });
       continue;
     }
 
@@ -107,11 +111,17 @@ async function handleReminders(request: Request, mode: 'cron' | 'manual') {
       await sendWhatsAppFeeReminder({
         phone: student.phone,
         studentName: student.full_name,
-        monthName: label,
-        amount: student.monthly_fee || 0,
+        pendingMonths: pendingFees.map(({ month }) => monthLabel(month)),
+        amount: pendingFees.reduce((total, fee) => total + fee.amount, 0),
       });
       sentCount++;
-      results.push({ studentId: student.id, name: student.full_name, status: 'sent' });
+      results.push({
+        studentId: student.id,
+        name: student.full_name,
+        status: 'sent',
+        pendingMonths: pendingFees.map(({ month }) => monthLabel(month)),
+        amount: pendingFees.reduce((total, fee) => total + fee.amount, 0),
+      });
     } catch (error: unknown) {
       failedCount++;
       results.push({
@@ -127,14 +137,12 @@ async function handleReminders(request: Request, mode: 'cron' | 'manual') {
     ok: true,
     mode,
     currentMonth,
-    monthLabel: label,
     summary: {
       totalActive: students.length,
-      paidCount,
-      unpaidCount: students.length - paidCount - beforeEnrollmentCount,
+      noPendingFeesCount,
+      unpaidCount: students.length - noPendingFeesCount,
       sentCount,
       skippedNoPhoneCount,
-      beforeEnrollmentCount,
       failedCount,
     },
     results,
