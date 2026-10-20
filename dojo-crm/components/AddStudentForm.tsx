@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { BELTS } from '@/lib/types';
+import { BELTS, firstOfMonth } from '@/lib/types';
 
 export default function AddStudentForm({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false);
@@ -13,42 +13,72 @@ export default function AddStudentForm({ onAdded }: { onAdded: () => void }) {
   const [fee, setFee] = useState('1000');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdWithoutFee, setCreatedWithoutFee] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) {
-      setError('Enter a name to enrol this student.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const { error: err } = await supabase.from('students').insert({
-      full_name: name.trim(),
-      belt_rank: belt,
-      phone: phone.trim() || null,
-      guardian_name: guardian.trim() || null,
-      date_of_birth: dob || null,
-      monthly_fee: Number(fee) || 1000,
-    });
-    setSaving(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
+  function resetForm() {
     setName('');
     setPhone('');
     setGuardian('');
     setDob('');
     setFee('1000');
     setBelt('White Belt');
+    setError(null);
+    setCreatedWithoutFee(false);
     setOpen(false);
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (createdWithoutFee) return;
+    if (!name.trim()) {
+      setError('Enter a name to enrol this student.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const now = new Date();
+    const joinDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const monthlyFee = Number(fee) || 1000;
+    const { data: student, error: err } = await supabase.from('students').insert({
+      full_name: name.trim(),
+      belt_rank: belt,
+      phone: phone.trim() || null,
+      guardian_name: guardian.trim() || null,
+      date_of_birth: dob || null,
+      join_date: joinDate,
+      monthly_fee: monthlyFee,
+    }).select('id').single();
+    if (err || !student) {
+      setSaving(false);
+      setError(err?.message || 'Student was not created. Please try again.');
+      return;
+    }
+    const { error: feeError } = await supabase.from('fees').upsert({
+      student_id: student.id,
+      month_year: firstOfMonth(),
+      paid: false,
+      paid_date: null,
+      amount: monthlyFee,
+    }, { onConflict: 'student_id,month_year' });
+    setSaving(false);
+    if (feeError) {
+      setCreatedWithoutFee(true);
+      setError(`Student enrolled, but this month's fee entry could not be created: ${feeError.message}. Please create the fee entry manually.`);
+      onAdded();
+      return;
+    }
+    resetForm();
     onAdded();
   }
 
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null);
+          setCreatedWithoutFee(false);
+          setOpen(true);
+        }}
         className="group inline-flex items-center gap-2 rounded-sm bg-seal px-4 py-2.5 font-body font-bold text-sm text-paper tracking-wide transition-transform hover:-translate-y-0.5 active:translate-y-0"
       >
         <span className="text-lg leading-none">+</span> Enrol Student
@@ -92,11 +122,12 @@ export default function AddStudentForm({ onAdded }: { onAdded: () => void }) {
         />
       </div>
       <div>
-        <label className="block text-[11px] uppercase tracking-widest text-muted mb-1.5">Phone</label>
+        <label className="block text-[11px] uppercase tracking-widest text-muted mb-1.5">WhatsApp phone (include country code)</label>
         <input
+          type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="Optional"
+          placeholder="e.g. +91 98765 43210"
           className="w-full bg-surface2 border border-hairline rounded-sm px-3 py-2 text-paper placeholder:text-muted/60 focus:border-gold outline-none"
         />
       </div>
@@ -120,14 +151,17 @@ export default function AddStudentForm({ onAdded }: { onAdded: () => void }) {
       </div>
       <div className="flex items-end gap-2 lg:col-span-1 sm:col-span-2">
         <button
+          type={createdWithoutFee ? 'button' : 'submit'}
           disabled={saving}
+          onClick={createdWithoutFee ? resetForm : undefined}
           className="rounded-sm bg-seal px-4 py-2.5 font-body font-bold text-sm text-paper disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save student'}
+          {saving ? 'Saving…' : createdWithoutFee ? 'Done' : 'Save student'}
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          disabled={saving}
+          onClick={resetForm}
           className="rounded-sm border border-hairline px-4 py-2.5 font-body text-sm text-muted hover:text-paper"
         >
           Cancel

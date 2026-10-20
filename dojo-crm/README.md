@@ -77,6 +77,13 @@ Standard JavaScript `toISOString()` converts dates to UTC, which can cause date 
 ### 5. Custom Sorting Algorithms for Martial Arts Ranks
 Standard database sorting formats belt ranks alphabetically (e.g., Black Belt before Blue Belt). The system enforces a domain-specific rank order array (`BELTS` constant: `White` $\rightarrow$ `Yellow` $\rightarrow$ `Orange` $\rightarrow$ `Green` $\rightarrow$ `Blue` $\rightarrow$ `Purple` $\rightarrow$ `Brown` $\rightarrow$ `Black`), sorting student rosters hierarchically.
 
+### 6. WhatsApp Fee Reminders
+- A new student gets a pending fee record beginning in their enrollment month; older months are not shown as due in the fee ledger, student profile, or portal.
+- WhatsApp reminders are sent to active students with unpaid fees and a phone number on the first day of each month. Vercel cron runs at 00:00 UTC; manual dispatch is available in the Fee Ledger.
+- Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME`, `WHATSAPP_TEMPLATE_LANGUAGE`, and `WHATSAPP_GRAPH_API_VERSION` as server-side environment variables. The approved Meta template must have three body placeholders in this order: student name, month, and amount.
+- Set `CRON_SECRET` in the deployment environment. Vercel sends it to the scheduled endpoint; the manual WhatsApp dialog also requires this key. Never expose it through a `NEXT_PUBLIC_` variable.
+- Enter student phone numbers in international format with a country code (for example, `+91...`). WhatsApp templates and opt-in must comply with Meta’s current messaging rules.
+
 ---
 
 ## 📁 Repository Structure
@@ -138,6 +145,25 @@ To send automated fee reminders from your personal/dojo Gmail address:
    CRON_SECRET="your-secure-cron-secret-token"
    ```
 4. **Schedule**: The system automatically dispatches emails to active unpaid students at **23:59 on the last day of every month**. You can also click **"✉️ Send Gmail Reminders"** in the Fee Ledger dashboard at any time.
+
+---
+
+## 💬 WhatsApp Fee Reminders Setup
+
+1. Configure a Meta WhatsApp Cloud API sender and create an approved message template with **three body placeholders**, in this order: student name, month, and amount.
+2. Add the following server-side environment variables to `.env.local` or the Vercel project. Use a supported Graph API version for your Meta app:
+   ```env
+   WHATSAPP_ACCESS_TOKEN="your-meta-whatsapp-access-token"
+   WHATSAPP_PHONE_NUMBER_ID="your-whatsapp-phone-number-id"
+   WHATSAPP_TEMPLATE_NAME="approved_fee_reminder_template"
+   WHATSAPP_TEMPLATE_LANGUAGE="en"
+   WHATSAPP_GRAPH_API_VERSION="v23.0"
+   CRON_SECRET="your-secure-cron-secret-token"
+   ```
+3. Set each student's phone number in international format, including its country code. Obtain the required WhatsApp opt-in before sending reminders.
+4. The Vercel cron sends WhatsApp reminders at **00:00 UTC on the 1st of each month** to active students who have a pending fee for that month and a phone number. Use **"💬 Send WhatsApp Reminders"** in the Fee Ledger for a manual send; it requires the `CRON_SECRET` value.
+
+New students start their fee ledger in the month they enroll. Earlier months are excluded from the fee ledger, student profile, portal, and reminder totals.
 
 ---
 

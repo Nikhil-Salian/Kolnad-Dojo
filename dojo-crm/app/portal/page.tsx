@@ -273,6 +273,7 @@ export default function PortalPage() {
   const monthlyFeeAmount = student?.monthly_fee || 1000;
   const unpaidMonthsList = months.filter((mKey) => {
     if (mKey > currentMonthKey) return false;
+    if (student?.join_date && mKey < `${student.join_date.slice(0, 7)}-01`) return false;
     const feeRecord = fees.find((f) => f.month_year === mKey);
     return !feeRecord?.paid;
   });
@@ -368,8 +369,13 @@ export default function PortalPage() {
     };
   });
 
-  const currentFee = fees.find((entry) => entry.month_year === currentMonthKey);
-  const outstandingMonths = months.filter((month) => !fees.find((entry) => entry.month_year === month)?.paid);
+  const currentFee = student?.join_date && currentMonthKey < `${student.join_date.slice(0, 7)}-01`
+    ? undefined
+    : fees.find((entry) => entry.month_year === currentMonthKey);
+  const outstandingMonths = months.filter((month) =>
+    (!student?.join_date || month >= `${student.join_date.slice(0, 7)}-01`)
+    && !fees.find((entry) => entry.month_year === month)?.paid
+  );
   const refreshPortalData = () => setRefreshKey((value) => value + 1);
   const monthsPaid = fees.filter((entry) => entry.paid).length;
   if (!mounted) {
@@ -679,7 +685,7 @@ export default function PortalPage() {
                 <div className="card rounded-sm p-5 sm:p-6">
                   <p className="font-display text-lg font-bold text-paper">Fee history</p>
                   <div className="mt-4 grid gap-2">
-                    {months.map((month) => {
+                    {months.filter((month) => !student?.join_date || month >= `${student.join_date.slice(0, 7)}-01`).map((month) => {
                       const fee = fees.find((entry) => entry.month_year === month);
                       return (
                         <div key={month} className="flex items-center justify-between border-b border-hairline/70 py-2.5 last:border-0">

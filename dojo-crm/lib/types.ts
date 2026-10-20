@@ -66,6 +66,10 @@ export function firstOfMonth(offsetMonths = 0) {
   return `${year}-${month}-01`;
 }
 
+export function studentHasFeeMonth(student: Pick<Student, 'join_date'>, month: string) {
+  return !student.join_date || month >= `${student.join_date.slice(0, 7)}-01`;
+}
+
 export function lastNMonths(n: number) {
   const arr: string[] = [];
   for (let i = n - 1; i >= 0; i--) arr.push(firstOfMonth(-i));

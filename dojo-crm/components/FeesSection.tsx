@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { Student, Fee, lastNMonths, monthLabel } from '@/lib/types';
+import { Student, Fee, lastNMonths, monthLabel, studentHasFeeMonth } from '@/lib/types';
 import BeltTag from './BeltTag';
 
 export default function FeesSection() {
@@ -13,6 +13,15 @@ export default function FeesSection() {
 
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsAppSecret, setWhatsAppSecret] = useState('');
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [whatsAppResult, setWhatsAppResult] = useState<{
+    ok?: boolean;
+    error?: string;
+    summary?: { sentCount: number; skippedNoPhoneCount: number; failedCount: number; paidCount: number };
+    results?: Array<{ name: string; status: string; error?: string }>;
+  } | null>(null);
   const [reminderResult, setReminderResult] = useState<{
     ok?: boolean;
     error?: string;
@@ -72,7 +81,9 @@ export default function FeesSection() {
   }
 
   const currentMonth = months[months.length - 1];
-  const unpaidThisMonth = students.filter((s) => !feeFor(s.id, currentMonth)?.paid);
+  const unpaidThisMonth = students.filter(
+    (s) => studentHasFeeMonth(s, currentMonth) && !feeFor(s.id, currentMonth)?.paid
+  );
 
   async function handleSendReminders() {
     setSendingReminders(true);
@@ -92,6 +103,32 @@ export default function FeesSection() {
     }
   }
 
+  async function handleSendWhatsAppReminders() {
+    setSendingWhatsApp(true);
+    setWhatsAppResult(null);
+    try {
+      const res = await fetch('/api/send-whatsapp-fee-reminders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${whatsAppSecret}`,
+        },
+      });
+      const data = await res.json();
+      setWhatsAppResult(data);
+    } catch (err: unknown) {
+      setWhatsAppResult({
+        error: err instanceof Error ? err.message : 'Failed to send WhatsApp reminders',
+      });
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  }
+
+  function closeWhatsAppModal() {
+    setShowWhatsAppModal(false);
+    setWhatsAppSecret('');
+  }
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -108,6 +145,16 @@ export default function FeesSection() {
             className="btn btn-secondary text-xs sm:text-sm py-2 px-3 flex items-center gap-2"
           >
             ✉️ Send Gmail Reminders
+          </button>
+          <button
+            onClick={() => {
+              setWhatsAppResult(null);
+              setWhatsAppSecret('');
+              setShowWhatsAppModal(true);
+            }}
+            className="btn btn-secondary text-xs sm:text-sm py-2 px-3 flex items-center gap-2"
+          >
+            💬 Send WhatsApp Reminders
           </button>
           <div className="card rounded-sm px-4 py-2.5 text-sm">
             <span className="text-muted">Outstanding this month: </span>
@@ -130,7 +177,9 @@ export default function FeesSection() {
         <div className="grid gap-4">
           {/* Mobile Card Roster View */}
           <div className="sm:hidden grid gap-3">
-            {students.map((s) => (
+            {students.map((s) => {
+              const studentMonths = months.filter((month) => studentHasFeeMonth(s, month));
+              return (
               <div key={s.id} className="card rounded-sm p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -140,22 +189,26 @@ export default function FeesSection() {
                     <div className="mt-2"><BeltTag belt={s.belt_rank} small /></div>
                   </div>
                   <span className="text-xs font-bold uppercase tracking-wide text-muted">
-                    {months.filter((m) => feeFor(s.id, m)?.paid).length}/{months.length} paid
+                    {studentMonths.filter((month) => feeFor(s.id, month)?.paid).length}/{studentMonths.length} paid
                   </span>
                 </div>
                 <div className="mt-4 grid grid-cols-6 gap-2">
                   {months.map((m) => {
                     const f = feeFor(s.id, m);
+                    const enrolled = studentHasFeeMonth(s, m);
                     return (
                       <button
                         key={m}
-                        onClick={() => toggle(s, m)}
+                        onClick={() => enrolled && toggle(s, m)}
+                        disabled={!enrolled}
                         className={`w-full aspect-square rounded-sm border text-xs font-bold transition-all ${
-                          f?.paid
-                            ? 'bg-moss border-moss text-paper'
-                            : 'bg-surface2 border-hairline text-muted hover:text-paper'
+                          !enrolled
+                            ? 'border-transparent bg-transparent text-transparent cursor-default'
+                            : f?.paid
+                              ? 'bg-moss border-moss text-paper'
+                              : 'bg-surface2 border-hairline text-muted hover:text-paper'
                         }`}
-                        aria-label={`${monthLabel(m)} ${f?.paid ? 'paid' : 'unpaid'}`}
+                        aria-label={enrolled ? `${monthLabel(m)} ${f?.paid ? 'paid' : 'unpaid'}` : `${monthLabel(m)} before enrollment`}
                       >
                         {f?.paid ? '✓' : '–'}
                       </button>
@@ -163,7 +216,8 @@ export default function FeesSection() {
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Desktop Table View */}
@@ -194,7 +248,7 @@ export default function FeesSection() {
                       const f = feeFor(s.id, m);
                       return (
                         <td key={m} className="text-center px-3 py-3">
-                          <button
+                          {studentHasFeeMonth(s, m) ? <button
                             onClick={() => toggle(s, m)}
                             className={`w-9 h-9 rounded-sm border transition-all inline-flex items-center justify-center font-bold ${
                               f?.paid
@@ -204,7 +258,7 @@ export default function FeesSection() {
                             aria-label={f?.paid ? 'Paid' : 'Unpaid'}
                           >
                             ✓
-                          </button>
+                          </button> : <span className="text-muted/30">—</span>}
                         </td>
                       );
                     })}
@@ -212,6 +266,74 @@ export default function FeesSection() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="card rounded-sm w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={closeWhatsAppModal}
+              className="absolute top-4 right-4 text-muted hover:text-paper text-lg font-bold"
+              aria-label="Close WhatsApp reminder dialog"
+            >
+              ✕
+            </button>
+            <h3 className="font-display text-xl font-bold text-paper">💬 WhatsApp Fee Reminders</h3>
+            <p className="text-muted text-sm mt-1">
+              Send the pending fee reminder for <strong className="text-gold">{monthLabel(currentMonth)}</strong> to unpaid students with a phone number.
+            </p>
+            <div className="mt-4 p-3 bg-surface2/60 border border-hairline rounded-sm text-xs text-muted leading-relaxed">
+              Automatic reminders are scheduled for the 1st of each month. Manual sending requires the configured CRON_SECRET. Phone numbers must include their country code, and the Meta WhatsApp template must be approved.
+            </div>
+            <label className="block mt-4 text-[11px] uppercase tracking-widest text-muted mb-1.5">
+              Manual sending key
+              <input
+                type="password"
+                autoComplete="off"
+                value={whatsAppSecret}
+                onChange={(event) => setWhatsAppSecret(event.target.value)}
+                placeholder="Enter CRON_SECRET"
+                className="mt-1.5 w-full bg-surface2 border border-hairline rounded-sm px-3 py-2 text-paper placeholder:text-muted/60 focus:border-gold outline-none normal-case tracking-normal"
+              />
+            </label>
+            <p className="mt-3 text-xs text-muted">
+              Unpaid students: {unpaidThisMonth.length}; with phone: {unpaidThisMonth.filter((s) => s.phone?.trim()).length}
+            </p>
+            {whatsAppResult && (
+              <div className={`mt-4 p-3 rounded-sm text-xs border ${whatsAppResult.error ? 'bg-[#2C1517] border-seal' : 'bg-[#14251B] border-moss'}`}>
+                {whatsAppResult.error ? (
+                  <p className="text-seal font-bold">Error: {whatsAppResult.error}</p>
+                ) : (
+                  <>
+                    <p className="text-moss font-bold">
+                      Processed — sent: {whatsAppResult.summary?.sentCount || 0}, missing phone: {whatsAppResult.summary?.skippedNoPhoneCount || 0}, failed: {whatsAppResult.summary?.failedCount || 0}, paid: {whatsAppResult.summary?.paidCount || 0}
+                    </p>
+                    {whatsAppResult.results?.map((result, index) => (
+                      <p key={`${result.name}-${index}`} className="mt-1 text-muted">
+                        {result.name}: {result.status}{result.error ? ` — ${result.error}` : ''}
+                      </p>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeWhatsAppModal}
+                className="btn text-xs py-2 px-4 border border-hairline text-muted hover:text-paper"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSendWhatsAppReminders}
+                disabled={sendingWhatsApp || !whatsAppSecret.trim() || unpaidThisMonth.length === 0}
+                className="btn btn-primary text-xs py-2 px-4 disabled:opacity-50"
+              >
+                {sendingWhatsApp ? 'Sending…' : 'Send WhatsApp Reminders'}
+              </button>
+            </div>
           </div>
         </div>
       )}

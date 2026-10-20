@@ -111,6 +111,7 @@ export default function StudentPage() {
   const monthlyFeeAmount = student.monthly_fee || 1000;
   const unpaidMonthsList = months.filter((mKey) => {
     if (mKey > currentMonthKey) return false;
+    if (student.join_date && mKey < `${student.join_date.slice(0, 7)}-01`) return false;
     const feeRecord = fees.find((f) => f.month_year === mKey);
     return !feeRecord?.paid;
   });
@@ -207,6 +208,7 @@ export default function StudentPage() {
   });
 
   const unpaidMonths = months.filter((m) => {
+    if (student.join_date && m < `${student.join_date.slice(0, 7)}-01`) return false;
     const f = fees.find((x) => x.month_year === m);
     return !f?.paid;
   });
@@ -432,7 +434,7 @@ export default function StudentPage() {
       <div className="card rounded-sm p-5 sm:p-6">
         <p className="font-display text-lg text-paper font-bold mb-4">Fee history</p>
         <div className="grid gap-2">
-          {months.map((m) => {
+          {months.filter((m) => !student.join_date || m >= `${student.join_date.slice(0, 7)}-01`).map((m) => {
             const f = fees.find((x) => x.month_year === m);
             return (
               <div key={m} className="flex items-center justify-between border-b border-hairline/60 last:border-0 py-2.5">
