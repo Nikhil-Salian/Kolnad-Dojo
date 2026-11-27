@@ -56,6 +56,10 @@ graph TD
 
 ## 💡 Key Architectural & Technical Concepts
 
+### Dashboard Sign-In
+- The main dojo dashboard requires a Supabase Auth account whose email is listed in the server-side `DOJO_ADMIN_EMAILS` comma-separated allowlist. Add the same staff accounts to `TOURNAMENT_ADMIN_EMAILS` to let them manage tournament updates.
+- The public anon key alone cannot grant dashboard access; the dashboard verifies the signed-in user and allowlist through `/api/dashboard/access`.
+
 ### 1. Dual-Client Supabase Authentication Architecture
 - **Browser Client (`lib/supabaseClient.ts`)**: Uses `NEXT_PUBLIC_SUPABASE_ANON_KEY` to interact with public/RLS-scoped tables for attendance roll calls and fee ledger updates.
 - **Server Administrative Client (`lib/supabaseAdmin.ts`)**: Instantiated on the server using `SUPABASE_SERVICE_ROLE_KEY`. Configured with `{ auth: { persistSession: false, autoRefreshToken: false } }` to safely invoke privileged Auth APIs (`auth.admin.createUser`) without polluting runtime sessions.
@@ -84,6 +88,12 @@ Standard database sorting formats belt ranks alphabetically (e.g., Black Belt be
 - `CRON_SECRET` is a secret value that you create (it is not supplied by Meta or WhatsApp). Set the same value in the app's `.env.local` for local use and in the Vercel project's Environment Variables for deployment. Enter that same value in the manual WhatsApp dialog when sending. Keep it private and never expose it through a `NEXT_PUBLIC_` variable.
 - Each reminder includes all unpaid months from the student's enrollment month through the current month. The total is calculated from each month's fee record amount, falling back to the student's monthly fee when no record exists.
 - Enter student phone numbers in international format with a country code (for example, `+91...`). WhatsApp templates and opt-in must comply with Meta’s current messaging rules.
+
+### 7. Tournament Updates
+- The `Tournament Updates` menu item opens a password-protected page for upcoming events and notices. Signed-in dojo portal accounts can view posts and attachments; posts may include details, a tournament date, and an image, PDF, or video (up to 100 MB).
+- Apply `supabase/migrations/20261127_tournament_updates.sql` to create the database table and private storage bucket. The table is protected by RLS; application API routes verify Supabase Auth sessions and use the server-only service-role key for reads and writes. Attachment links are short-lived signed URLs.
+- Create staff accounts in Supabase Auth and set `TOURNAMENT_ADMIN_EMAILS` to a comma-separated allowlist of staff email addresses. Only authenticated users on this list can publish or delete updates. Set the existing `SUPABASE_SERVICE_ROLE_KEY` on the server; never expose it as a `NEXT_PUBLIC_` variable.
+- Direct-to-storage signed uploads are used for larger video files. The media bucket is private; only signed-in users can request temporary viewing links.
 
 ---
 

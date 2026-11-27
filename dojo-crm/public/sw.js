@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kolnad-dojo-cache-v1';
+const CACHE_NAME = 'kolnad-dojo-cache-v2';
 const ASSETS_TO_CACHE = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -23,6 +23,12 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
